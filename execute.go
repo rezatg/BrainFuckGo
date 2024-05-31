@@ -50,7 +50,7 @@ func (s *BF) Exectue() (string, error) {
 		case 43:
 			err = s.increment()
 
-			// -
+		// -
 		case 45:
 			err = s.decrement()
 
@@ -104,7 +104,7 @@ func (s *BF) increment() error {
 }
 
 func (s *BF) decrement() error {
-	if s.Stack[s.Pointer] >= uint16(0) {
+	if s.Pointer <= 0  {
 		return errors.New("unable to decrement stack")
 	}
 
