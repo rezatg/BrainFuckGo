@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 func main() {
-	b := CompilerBF(">++++++[<+++++++++++++++++++>-]<")
+	var s string = ">++++++[<+++++++++++++++++++>-]<.>->++++++[<+++++++++++++++++>-]<.>>++[<+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++>-]<.>->+++++++[<++++++++++++++>-]<."
+	b := CompilerBF(s)
 	out, err := b.Exectue()
 	if err != nil {
 		log.Printf("err: %s", err.Error())
@@ -26,7 +28,7 @@ const (
 
 type BF struct {
 	Code    string
-	Stack   []uint16
+	Stack   []uint32
 	loops   []uint32
 	windup  uint32
 	Pointer int
@@ -35,8 +37,8 @@ type BF struct {
 
 func CompilerBF(code string) *BF {
 	return &BF{
-		Code:   code,
-		Stack:  make([]uint16, len(code)),
+		Code:   strings.ReplaceAll(code, " ", ""),
+		Stack:  make([]uint32, len(code)),
 		loops:  []uint32{},
 		windup: 0,
 	}
@@ -44,8 +46,10 @@ func CompilerBF(code string) *BF {
 
 func (s *BF) Exectue() (string, error) {
 	var err error
-	for _, i := range s.Code {
-		switch i {
+	var result strings.Builder
+
+	for i := 0; i < len(s.Code); i++ {
+		switch s.Code[i] {
 		// +
 		case 43:
 			err = s.increment()
@@ -70,17 +74,35 @@ func (s *BF) Exectue() (string, error) {
 				return "", err
 			}
 
-			fmt.Println(char, uint16(char))
+			s.Stack[s.Pointer] = uint32(char)
 
-			s.Stack[s.Pointer] = uint16(char)
+		// .
+		case 46:
+			result.WriteByte(byte(s.Stack[s.Pointer]))
 
 		// [
 		case 91:
-			// s.openLoop()
+			if s.Stack[s.Pointer] == 0 {
+				var skips int
+				for skips = 1; skips > 0; i++ {
+					if s.Code[i] == '[' {
+						skips++
+					} else if s.Code[i] == ']' {
+						skips--
+					}
+				}
+				i--
+			} else {
+				s.loops = append(s.loops, uint32(i))
+			}
 
 		// ]
 		case 93:
-			// s.closeLoop()
+			if s.Stack[s.Pointer] != 0 {
+				i = int(s.peekLoop()) - 1
+			} else {
+				s.popLoop()
+			}
 
 		default:
 			err = errors.New("unknown operator")
@@ -90,25 +112,25 @@ func (s *BF) Exectue() (string, error) {
 		}
 	}
 
-	fmt.Println(s.Stack[s.Pointer])
-	return fmt.Sprintf("%c", s.Stack[s.Pointer]), nil
+	return result.String(), nil
 }
 
 func (s *BF) increment() error {
-	if s.Stack[s.Pointer] >= 255 {
-		return errors.New("unable to increment stack")
+	s.Stack[s.Pointer]++
+	if s.Stack[s.Pointer] == 0 {
+		s.Stack[s.Pointer] = 1
 	}
 
-	s.Stack[s.Pointer]++
 	return nil
 }
 
 func (s *BF) decrement() error {
-	if s.Pointer <= 0  {
-		return errors.New("unable to decrement stack")
+	if s.Stack[s.Pointer] == 0 {
+		s.Stack[s.Pointer] = 255
+	} else {
+		s.Stack[s.Pointer]--
 	}
 
-	s.Stack[s.Pointer]--
 	return nil
 }
 
@@ -132,27 +154,13 @@ func (s *BF) shift(mode int8) error {
 	return nil
 }
 
-func (s *BF) openLoop() {
-	s.loops = append(s.loops, s.windup)
-}
-
-func (s *BF) closeLoop() {
-	if s.Stack[s.Pointer] == 0 {
-		s.popLoop()
-		return
-	}
-
-	s.windup = s.peakLoop()
+func (s *BF) peekLoop() uint32 {
+	length := len(s.loops)
+	return s.loops[length-1]
 }
 
 func (s *BF) popLoop() {
-	length := len(s.loops)
-	s.loops = s.loops[:length-1]
-}
-
-func (s *BF) peakLoop() uint32 {
-	length := len(s.loops)
-	return s.loops[length-1]
+	s.loops = s.loops[:len(s.loops)-1]
 }
 
 // func (s *BF) isValidToken(str string) bool {
